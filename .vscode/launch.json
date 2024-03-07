@@ -28,6 +28,16 @@
             "name": ".NET Core Attach",
             "type": "coreclr",
             "request": "attach"
+        },
+        {
+            "name": "MalevaStore Flutter",
+            "request": "launch",
+            "type": "dart",
+            "program": "Platforms/store_mobile/lib/main.dart",
+            "args": [
+                "--dart-define",
+                "fav-qs-app-token=YOUR_API_KEY"
+            ]
         }
     ]
 }
