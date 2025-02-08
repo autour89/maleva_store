@@ -1,28 +1,11 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": ".NET Core Launch",
-            "type": "coreclr",
+            "name": "API Debug",
+            "type": "dotnet",
             "request": "launch",
-            "preLaunchTask": "build",
-            "program": "${workspaceFolder}/API/bin/Debug/net8.0/API.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/API",
-            "stopAtEntry": false,
-            "serverReadyAction": {
-                "action": "openExternally",
-                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
-            },
-            "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development"
-            },
-            "sourceFileMap": {
-                "/Views": "${workspaceFolder}/Views"
-            }
+            "projectPath": "${workspaceFolder}/API/API.csproj"
         },
         {
             "name": ".NET Core Attach",
@@ -30,14 +13,11 @@
             "request": "attach"
         },
         {
-            "name": "MalevaStore Flutter",
-            "request": "launch",
+            "name": "Prostor Flutter",
             "type": "dart",
-            "program": "Platforms/store_mobile/lib/main.dart",
-            "args": [
-                "--dart-define",
-                "fav-qs-app-token=YOUR_API_KEY"
-            ]
+            "request": "launch",
+            "program": "Platforms/prostor/lib/main.dart"
         }
+
     ]
 }
