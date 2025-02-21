@@ -1,8 +1,7 @@
-namespace Core.Interfaces
+namespace Core.Interfaces;
+
+public interface IResponseCacheService
 {
-    public interface IResponseCacheService
-    {
-        Task CacheResponseAsync(string cacheKey, object response, TimeSpan timeToLive);
-        Task<string> GetCachedResponse(string cacheKey);
-    }
+    Task CacheResponseAsync(string cacheKey, object response, TimeSpan timeToLive);
+    Task<string> GetCachedResponse(string cacheKey);
 }

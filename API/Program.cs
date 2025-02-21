@@ -33,7 +33,7 @@ app.UseStaticFiles(
         FileProvider = new PhysicalFileProvider(
             Path.Combine(Directory.GetCurrentDirectory(), "Content")
         ),
-        RequestPath = "/Content"
+        RequestPath = "/Content",
     }
 );
 

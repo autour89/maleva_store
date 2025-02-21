@@ -2,33 +2,34 @@ using System.Text.Json;
 using Core.Interfaces;
 using StackExchange.Redis;
 
-namespace Infrastructure.Services
+namespace Infrastructure.Services;
+
+public class ResponseCacheService(IConnectionMultiplexer redis) : IResponseCacheService
 {
-    public class ResponseCacheService(IConnectionMultiplexer redis) : IResponseCacheService
+    private readonly IDatabase _database = redis.GetDatabase();
+
+    public async Task CacheResponseAsync(string cacheKey, object response, TimeSpan timeToLive)
     {
-        private readonly IDatabase _database = redis.GetDatabase();
+        if (response == null)
+            return;
 
-        public async Task CacheResponseAsync(string cacheKey, object response, TimeSpan timeToLive)
+        var options = new JsonSerializerOptions
         {
-            if (response == null) return;
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        };
 
-            var options = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
+        var serialisedResponse = JsonSerializer.Serialize(response, options);
 
-            var serialisedResponse = JsonSerializer.Serialize(response, options);
+        await _database.StringSetAsync(cacheKey, serialisedResponse, timeToLive);
+    }
 
-            await _database.StringSetAsync(cacheKey, serialisedResponse, timeToLive);
-        }
+    public async Task<string> GetCachedResponse(string cacheKey)
+    {
+        var cachedResponse = await _database.StringGetAsync(cacheKey);
 
-        public async Task<string> GetCachedResponse(string cacheKey)
-        {
-            var cachedResponse = await _database.StringGetAsync(cacheKey);
+        if (cachedResponse.IsNullOrEmpty)
+            return null;
 
-            if (cachedResponse.IsNullOrEmpty) return null;
-
-            return cachedResponse;
-        }
+        return cachedResponse;
     }
 }

@@ -3,61 +3,60 @@ using Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
-namespace API.Helpers
+namespace API.Helpers;
+
+public class CachedAttribute(int timeToLiveSeconds) : Attribute, IAsyncActionFilter
 {
-    public class CachedAttribute(int timeToLiveSeconds) : Attribute, IAsyncActionFilter
+    private readonly int _timeToLiveSeconds = timeToLiveSeconds;
+
+    public async Task OnActionExecutionAsync(
+        ActionExecutingContext context,
+        ActionExecutionDelegate next
+    )
     {
-        private readonly int _timeToLiveSeconds = timeToLiveSeconds;
+        var cacheService =
+            context.HttpContext.RequestServices.GetRequiredService<IResponseCacheService>();
 
-        public async Task OnActionExecutionAsync(
-            ActionExecutingContext context,
-            ActionExecutionDelegate next
-        )
+        var cacheKey = GenerateCacheKeyFromRequest(context.HttpContext.Request);
+        var cachedResponse = await cacheService.GetCachedResponse(cacheKey);
+
+        if (!string.IsNullOrEmpty(cachedResponse))
         {
-            var cacheService =
-                context.HttpContext.RequestServices.GetRequiredService<IResponseCacheService>();
-
-            var cacheKey = GenerateCacheKeyFromRequest(context.HttpContext.Request);
-            var cachedResponse = await cacheService.GetCachedResponse(cacheKey);
-
-            if (!string.IsNullOrEmpty(cachedResponse))
+            var contentResult = new ContentResult
             {
-                var contentResult = new ContentResult
-                {
-                    Content = cachedResponse,
-                    ContentType = "application/json",
-                    StatusCode = 200
-                };
+                Content = cachedResponse,
+                ContentType = "application/json",
+                StatusCode = 200,
+            };
 
-                context.Result = contentResult;
+            context.Result = contentResult;
 
-                return;
-            }
-
-            var executedContext = await next(); // move to controller
-
-            if (executedContext.Result is OkObjectResult okObjectResult)
-            {
-                await cacheService.CacheResponseAsync(
-                    cacheKey,
-                    okObjectResult.Value,
-                    TimeSpan.FromSeconds(_timeToLiveSeconds)
-                );
-            }
+            return;
         }
 
-        private string GenerateCacheKeyFromRequest(HttpRequest request)
+        var executedContext = await next(); // move to controller
+
+        if (executedContext.Result is OkObjectResult okObjectResult)
         {
-            var keyBuilder = new StringBuilder();
-
-            keyBuilder.Append($"{request.Path}");
-
-            foreach (var (key, value) in request.Query.OrderBy(x => x.Key))
-            {
-                keyBuilder.Append($"|{key}-{value}");
-            }
-
-            return keyBuilder.ToString();
+            await cacheService.CacheResponseAsync(
+                cacheKey,
+                okObjectResult.Value,
+                TimeSpan.FromSeconds(_timeToLiveSeconds)
+            );
         }
+    }
+
+    private string GenerateCacheKeyFromRequest(HttpRequest request)
+    {
+        var keyBuilder = new StringBuilder();
+
+        keyBuilder.Append($"{request.Path}");
+
+        foreach (var (key, value) in request.Query.OrderBy(x => x.Key))
+        {
+            keyBuilder.Append($"|{key}-{value}");
+        }
+
+        return keyBuilder.ToString();
     }
 }

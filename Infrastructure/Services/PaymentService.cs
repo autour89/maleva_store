@@ -6,106 +6,105 @@ using Microsoft.Extensions.Configuration;
 using Stripe;
 using Product = Core.Entities.Product;
 
-namespace Infrastructure.Services
+namespace Infrastructure.Services;
+
+public class PaymentService(
+    IUnitOfWork unitOfWork,
+    IBasketRepository basketRepository,
+    IConfiguration config
+) : IPaymentService
 {
-    public class PaymentService(
-        IUnitOfWork unitOfWork,
-        IBasketRepository basketRepository,
-        IConfiguration config
-        ) : IPaymentService
+    private readonly IUnitOfWork _unitOfWork = unitOfWork;
+    private readonly IBasketRepository _basketRepository = basketRepository;
+    private readonly IConfiguration _config = config;
+
+    public async Task<CustomerBasket> CreateOrUpdatePaymentIntent(string basketId)
     {
-        private readonly IUnitOfWork _unitOfWork = unitOfWork;
-        private readonly IBasketRepository _basketRepository = basketRepository;
-        private readonly IConfiguration _config = config;
+        StripeConfiguration.ApiKey = _config["StripeSettings:SecretKey"];
 
-        public async Task<CustomerBasket> CreateOrUpdatePaymentIntent(string basketId)
+        var basket = await _basketRepository.GetBasketAsync(basketId);
+
+        if (basket == null)
+            return null;
+
+        var shippingPrice = 0m;
+
+        if (basket.DeliveryMethodId.HasValue)
         {
-            StripeConfiguration.ApiKey = _config["StripeSettings:SecretKey"];
-
-            var basket = await _basketRepository.GetBasketAsync(basketId);
-
-            if (basket == null)
-                return null;
-
-            var shippingPrice = 0m;
-
-            if (basket.DeliveryMethodId.HasValue)
-            {
-                var deliveryMethod = await _unitOfWork
-                    .Repository<DeliveryMethod>()
-                    .GetByIdAsync((int)basket.DeliveryMethodId);
-                shippingPrice = deliveryMethod.Price;
-            }
-
-            foreach (var item in basket.Items)
-            {
-                var productItem = await _unitOfWork.Repository<Product>().GetByIdAsync(item.Id);
-                if (item.Price != productItem.Price)
-                {
-                    item.Price = productItem.Price;
-                }
-            }
-
-            var service = new PaymentIntentService();
-
-            PaymentIntent intent;
-
-            if (string.IsNullOrEmpty(basket.PaymentIntentId))
-            {
-                var options = new PaymentIntentCreateOptions
-                {
-                    Amount =
-                        (long)basket.Items.Sum(i => i.Quantity * (i.Price * 100))
-                        + (long)shippingPrice * 100,
-                    Currency = "usd",
-                    PaymentMethodTypes = ["card"]
-                };
-                intent = await service.CreateAsync(options);
-                basket.PaymentIntentId = intent.Id;
-                basket.ClientSecret = intent.ClientSecret;
-            }
-            else
-            {
-                var options = new PaymentIntentUpdateOptions
-                {
-                    Amount =
-                        (long)basket.Items.Sum(i => i.Quantity * (i.Price * 100))
-                        + (long)shippingPrice * 100
-                };
-                await service.UpdateAsync(basket.PaymentIntentId, options);
-            }
-
-            await _basketRepository.UpdateBasketAsync(basket);
-
-            return basket;
+            var deliveryMethod = await _unitOfWork
+                .Repository<DeliveryMethod>()
+                .GetByIdAsync((int)basket.DeliveryMethodId);
+            shippingPrice = deliveryMethod.Price;
         }
 
-        public async Task<Order> UpdateOrderPaymentFailed(string paymentIntentId)
+        foreach (var item in basket.Items)
         {
-            var spec = new OrderByPaymentIntentIdSpecification(paymentIntentId);
-            var order = await _unitOfWork.Repository<Order>().GetEntityWithSpec(spec);
-
-            if (order == null)
-                return null;
-
-            order.Status = OrderStatus.PaymentFailed;
-            await _unitOfWork.Complete();
-
-            return order;
+            var productItem = await _unitOfWork.Repository<Product>().GetByIdAsync(item.Id);
+            if (item.Price != productItem.Price)
+            {
+                item.Price = productItem.Price;
+            }
         }
 
-        public async Task<Order> UpdateOrderPaymentSucceeded(string paymentIntentId)
+        var service = new PaymentIntentService();
+
+        PaymentIntent intent;
+
+        if (string.IsNullOrEmpty(basket.PaymentIntentId))
         {
-            var spec = new OrderByPaymentIntentIdSpecification(paymentIntentId);
-            var order = await _unitOfWork.Repository<Order>().GetEntityWithSpec(spec);
-
-            if (order == null)
-                return null;
-
-            order.Status = OrderStatus.PaymentReceived;
-            await _unitOfWork.Complete();
-
-            return order;
+            var options = new PaymentIntentCreateOptions
+            {
+                Amount =
+                    (long)basket.Items.Sum(i => i.Quantity * (i.Price * 100))
+                    + (long)shippingPrice * 100,
+                Currency = "usd",
+                PaymentMethodTypes = ["card"],
+            };
+            intent = await service.CreateAsync(options);
+            basket.PaymentIntentId = intent.Id;
+            basket.ClientSecret = intent.ClientSecret;
         }
+        else
+        {
+            var options = new PaymentIntentUpdateOptions
+            {
+                Amount =
+                    (long)basket.Items.Sum(i => i.Quantity * (i.Price * 100))
+                    + (long)shippingPrice * 100,
+            };
+            await service.UpdateAsync(basket.PaymentIntentId, options);
+        }
+
+        await _basketRepository.UpdateBasketAsync(basket);
+
+        return basket;
+    }
+
+    public async Task<Order> UpdateOrderPaymentFailed(string paymentIntentId)
+    {
+        var spec = new OrderByPaymentIntentIdSpecification(paymentIntentId);
+        var order = await _unitOfWork.Repository<Order>().GetEntityWithSpec(spec);
+
+        if (order == null)
+            return null;
+
+        order.Status = OrderStatus.PaymentFailed;
+        await _unitOfWork.Complete();
+
+        return order;
+    }
+
+    public async Task<Order> UpdateOrderPaymentSucceeded(string paymentIntentId)
+    {
+        var spec = new OrderByPaymentIntentIdSpecification(paymentIntentId);
+        var order = await _unitOfWork.Repository<Order>().GetEntityWithSpec(spec);
+
+        if (order == null)
+            return null;
+
+        order.Status = OrderStatus.PaymentReceived;
+        await _unitOfWork.Complete();
+
+        return order;
     }
 }
